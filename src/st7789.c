@@ -1,4 +1,5 @@
 #include "st7789.h"
+#include "stm32l4xx_hal.h"
 
 #ifdef USE_DMA
 #include <string.h>
@@ -23,6 +24,14 @@ static void ST7789_WriteCommand(uint8_t cmd)
 	ST7789_DC_Clr();
 	HAL_SPI_Transmit(&ST7789_SPI_PORT, &cmd, sizeof(cmd), HAL_MAX_DELAY);
 	ST7789_UnSelect();
+}
+
+//Delay func
+static void delay_ms(uint32_t ms) {
+	for (uint32_t i = 0; i < 3; i++) {
+		__NOP();
+
+	}
 }
 
 /**
@@ -136,11 +145,14 @@ void ST7789_Init(void)
 	#ifdef USE_DMA
 		memset(disp_buf, 0, sizeof(disp_buf));
 	#endif
-	HAL_Delay(10);
+	//HAL_Delay(10);
+	delay_ms(10);
     ST7789_RST_Clr();
-    HAL_Delay(10);
+    //HAL_Delay(10);
+	delay_ms(10);
     ST7789_RST_Set();
-    HAL_Delay(20);
+    //HAL_Delay(20);
+	delay_ms(20);
 
     ST7789_WriteCommand(ST7789_COLMOD);		//	Set color mode
     ST7789_WriteSmallData(ST7789_COLOR_MODE_16bit);
@@ -187,7 +199,8 @@ void ST7789_Init(void)
   	ST7789_WriteCommand (ST7789_NORON);		//	Normal Display on
   	ST7789_WriteCommand (ST7789_DISPON);	//	Main screen turned on	
 
-	HAL_Delay(50);
+	//HAL_Delay(50);
+	delay_ms(50);
 	ST7789_Fill_Color(BLACK);				//	Fill with Black.
 }
 
@@ -676,72 +689,94 @@ void ST7789_TearEffect(uint8_t tear)
 void ST7789_Test(void)
 {
 	ST7789_Fill_Color(WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 	ST7789_WriteString(10, 20, "Speed Test", Font_11x18, RED, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 	ST7789_Fill_Color(CYAN);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(RED);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(BLUE);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(GREEN);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(YELLOW);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(BROWN);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(DARKBLUE);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(MAGENTA);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(LIGHTGREEN);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(LGRAY);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(LBBLUE);
-    HAL_Delay(500);
+    //HAL_Delay(500);
+	delay_ms(500);
 	ST7789_Fill_Color(WHITE);
-	HAL_Delay(500);
+	//HAL_Delay(500);
+	delay_ms(500);
 
 	ST7789_WriteString(10, 10, "Font test.", Font_16x26, GBLUE, WHITE);
 	ST7789_WriteString(10, 50, "Hello Steve!", Font_7x10, RED, WHITE);
 	ST7789_WriteString(10, 75, "Hello Steve!", Font_11x18, YELLOW, WHITE);
 	ST7789_WriteString(10, 100, "Hello Steve!", Font_16x26, MAGENTA, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	ST7789_Fill_Color(RED);
 	ST7789_WriteString(10, 10, "Rect./Line.", Font_11x18, YELLOW, BLACK);
 	ST7789_DrawRectangle(30, 30, 100, 100, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	ST7789_Fill_Color(RED);
 	ST7789_WriteString(10, 10, "Filled Rect.", Font_11x18, YELLOW, BLACK);
 	ST7789_DrawFilledRectangle(30, 30, 50, 50, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	ST7789_Fill_Color(RED);
 	ST7789_WriteString(10, 10, "Circle.", Font_11x18, YELLOW, BLACK);
 	ST7789_DrawCircle(60, 60, 25, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	ST7789_Fill_Color(RED);
 	ST7789_WriteString(10, 10, "Filled Cir.", Font_11x18, YELLOW, BLACK);
 	ST7789_DrawFilledCircle(60, 60, 25, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	ST7789_Fill_Color(RED);
 	ST7789_WriteString(10, 10, "Triangle", Font_11x18, YELLOW, BLACK);
 	ST7789_DrawTriangle(30, 30, 30, 70, 60, 40, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	ST7789_Fill_Color(RED);
 	ST7789_WriteString(10, 10, "Filled Tri", Font_11x18, YELLOW, BLACK);
 	ST7789_DrawFilledTriangle(30, 30, 30, 70, 60, 40, WHITE);
-	HAL_Delay(1000);
+	//HAL_Delay(1000);
+	delay_ms(1000);
 
 	//	If FLASH cannot storage anymore datas, please delete codes below.
 	ST7789_Fill_Color(WHITE);
 	ST7789_DrawImage(0, 0, 128, 128, (uint16_t *)saber);
-	HAL_Delay(3000);
+	//HAL_Delay(3000);
+	delay_ms(3000);
 }
