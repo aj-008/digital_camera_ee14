@@ -1,5 +1,17 @@
 #include "stm32l4xx_hal.h"
 #include "st7789.h"
+#include "ee14lib.h"
+
+#define SCL D13
+#define SDA D11
+#define RES D9
+#define DC  D6
+#define CS  A3
+
+int _write(int file, char *data, int len) {
+    serial_write(USART2, data, len);
+    return len;
+}
 
 SPI_HandleTypeDef hspi1;
 
@@ -20,7 +32,21 @@ static void spi_init(void) {
     HAL_SPI_Init(&hspi1);
 }
 
+void display_gpio_init() {
+    gpio_config_direction(CS, OUTPUT);
+    gpio_config_direction(DC, OUTPUT);
+    gpio_config_direction(SCL, OUTPUT);
+    gpio_config_direction(SDA, OUTPUT);
+    gpio_config_direction(RES, OUTPUT);
+
+
+    gpio_config_pullup(RES, PULL_UP); // maybe reset active low
+}
+
 int main(void) {
+    host_serial_init();
+    display_gpio_init();
+
     HAL_Init();
     spi_init();
 
