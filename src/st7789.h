@@ -2,28 +2,35 @@
 #define __ST7789_H
 
 #include "fonts.h"
-#include "main.h"
+#include "stm32l4xx_hal.h"
+
 
 /* choose a Hardware SPI port to use. */
 #define ST7789_SPI_PORT hspi1
 extern SPI_HandleTypeDef ST7789_SPI_PORT;
 
 /* choose whether use DMA or not */
-#define USE_DMA
+//#define USE_DMA
 
 /* If u need CS control, comment below*/
 //#define CFG_NO_CS
 
 /* Pin connection*/
+// these map to CubeMX-generated GPIO label names
+/* Pin connection*/
+#define ST7789_RST_GPIO_Port GPIOA
+#define ST7789_RST_Pin       GPIO_PIN_8
+#define ST7789_DC_GPIO_Port  GPIOB
+#define ST7789_DC_Pin        GPIO_PIN_1
+#define ST7789_CS_GPIO_Port  GPIOA
+#define ST7789_CS_Pin        GPIO_PIN_4
+
 #define ST7789_RST_PORT ST7789_RST_GPIO_Port
 #define ST7789_RST_PIN  ST7789_RST_Pin
 #define ST7789_DC_PORT  ST7789_DC_GPIO_Port
 #define ST7789_DC_PIN   ST7789_DC_Pin
-
-#ifndef CFG_NO_CS
 #define ST7789_CS_PORT  ST7789_CS_GPIO_Port
 #define ST7789_CS_PIN   ST7789_CS_Pin
-#endif
 
 /* If u need Backlight control, uncomment below */
 //#define BLK_PORT
@@ -39,8 +46,8 @@ extern SPI_HandleTypeDef ST7789_SPI_PORT;
 
 /* Choose a type you are using */
 //#define USING_135X240
-#define USING_240X240
-//#define USING_170X320
+//#define USING_240X240
+#define USING_170X320
 
 /* Choose a display rotation you want to use: (0-3) */
 //#define ST7789_ROTATION 0
