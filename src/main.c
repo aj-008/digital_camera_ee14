@@ -44,16 +44,21 @@ void display_gpio_init() {
     gpio_write(RES, 1);
 }
 
+volatile uint32_t test = 0;
+
+
+
 int main(void) {
+    HAL_Init();
     host_serial_init();
+
     display_gpio_init();
 
-    HAL_Init();
     spi_init();
 
 
     ST7789_Init();
     ST7789_Fill_Color(RED);
+    
 
-    while (1) {}
 }
