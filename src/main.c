@@ -40,7 +40,8 @@ void display_gpio_init() {
     gpio_config_direction(RES, OUTPUT);
 
 
-    gpio_config_pullup(RES, PULL_UP); // maybe reset active low
+   // gpio_config_pullup(RES, PULL_UP); // maybe reset active low
+    gpio_write(RES, 1);
 }
 
 int main(void) {
