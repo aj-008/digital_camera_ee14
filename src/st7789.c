@@ -28,10 +28,7 @@ static void ST7789_WriteCommand(uint8_t cmd)
 
 //Delay func
 static void delay_ms(uint32_t ms) {
-	for (uint32_t i = 0; i < 3; i++) {
-		__NOP();
-
-	}
+	HAL_Delay(ms);
 }
 
 /**
@@ -113,7 +110,7 @@ void ST7789_SetRotation(uint8_t m)
  */
 static void ST7789_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
-	ST7789_Select();
+	//ST7789_Select();
 	uint16_t x_start = x0 + X_SHIFT, x_end = x1 + X_SHIFT;
 	uint16_t y_start = y0 + Y_SHIFT, y_end = y1 + Y_SHIFT;
 	
@@ -132,7 +129,7 @@ static void ST7789_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint1
 	}
 	/* Write to RAM */
 	ST7789_WriteCommand(ST7789_RAMWR);
-	ST7789_UnSelect();
+	//ST7789_UnSelect();
 }
 
 /**
