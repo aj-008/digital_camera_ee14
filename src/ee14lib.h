@@ -57,4 +57,9 @@ void serial_write(USART_TypeDef *USARTx, const char *buffer, int len);
 // Spin wait until we have a byte.
 char serial_read(USART_TypeDef *USARTx);
 
+
+EE14Lib_Err i2c_init(I2C_TypeDef* i2c, EE14Lib_Pin scl, EE14Lib_Pin sda);
+bool i2c_write(I2C_TypeDef* i2c, unsigned char device_address, unsigned char* data, unsigned char len);
+bool i2c_read(I2C_TypeDef* i2c, unsigned char device_address, unsigned char* data, unsigned char len);
+
 #endif
