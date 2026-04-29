@@ -1,6 +1,12 @@
 #include "stm32l4xx_hal.h"
 #include "st7789.h"
 #include "ee14lib.h"
+#include "ff.h"
+#include "stm32_adafruit_sd.h"   // BSP_SD_Init
+#include "ff.h"                   // FATFS, f_mount
+#include "jpeg_display.h" 
+#include "fonts.h"
+#include <stdio.h>
 
 #define SCL D13  // PB3 - SPI1_SCK  AF5
 #define SDA D11  // PB5 - SPI1_MOSI AF5
@@ -38,6 +44,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 }
 
+//Clock config
 static void SystemClock_Config(void) {
 
     //This RCC code basically makes it 80MHz, was there a better way we learned in class to do this?
@@ -86,6 +93,14 @@ static void spi_init(void) {
     HAL_SPI_Init(&hspi1);  // this triggers HAL_SPI_MspInit above
 }
 
+/*
+Display:
+MOSI(SDA) - D11 - PB5 - SPI1 (shares with SD Card Reader)
+SCL - D13 - PB3 - SPI1 (Shares with SD Card Reader)
+RES(reset) - D9 - PA8
+DC (data/command) - D6 - PB1
+CS - A3 - PA4 
+*/
 static void display_gpio_init(void) {
     gpio_config_alternate_function(D13, 5);
     gpio_config_alternate_function (D11, 5);
@@ -98,6 +113,125 @@ static void display_gpio_init(void) {
     gpio_write(D9, 1);
 }
 
+/* 
+SD Card:
+MOSI - D11 - PB5 - SPI1 (shares with SDA on display)
+MISO - D12 - PB4 - SPI1
+SCK - D13 - PB3 - SPI1 (shares with SCL on display)
+CS - A0 - PA0 - Not on SPI
+*/
+static void sdCard_gpio_init() {
+    gpio_config_alternate_function(D12, 5);
+
+    gpio_config_direction(A0, OUTPUT);
+    gpio_write(A0, 1);
+}
+
+
+void sd_display_test(void) {
+    FIL file;
+    FRESULT res;
+    UINT bw, br;
+   /// char write_buf[] = "Hello from STM32!";
+    char read_buf[64*64] = {0};
+    char status[32];
+
+    char write_buf[64*64];
+
+
+    for (int y = 0; y < 64; y++)
+    {
+        for (int x = 0; x < 64; x++)
+        {
+            if ((x + y) % 2 == 0)
+                write_buf[(y*64)+x] = 0xAB; // black
+            else
+                write_buf[(y*64)+x] = 0xCD; // white
+        }
+    }
+
+    ST7789_Fill_Color(BLACK);
+    ST7789_WriteString(5, 5, "SD Card Test", Font_11x18, WHITE, BLACK);
+
+    // --- Mount ---
+    FATFS fs;
+    res = f_mount(&fs, "", 1);
+    snprintf(status, sizeof(status), "Mount: %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
+    ST7789_WriteString(5, 30, status, Font_7x10, res == FR_OK ? GREEN : RED, BLACK);
+    if (res != FR_OK) return;
+
+    // --- Write ---
+    res = f_open(&file, "/TEST.TXT", FA_CREATE_ALWAYS | FA_WRITE);
+    res = f_write(&file, write_buf, sizeof(write_buf), &bw);
+    f_close(&file);
+    snprintf(status, sizeof(status), "Write: %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
+    
+
+    //ST7789_DrawImage(0, 0, 128, 128, saber);
+
+    // --- Read ---
+    res = f_open(&file, "/TEST.TXT", FA_READ);
+    res = f_read(&file, read_buf, sizeof(read_buf) - 1, &br);
+    f_close(&file);
+    snprintf(status, sizeof(status), "Read:  %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
+    //ST7789_WriteString(5, 70, status, Font_7x10, res == FR_OK ? GREEN : RED, BLACK);
+    ST7789_DrawImage(160, 0, 64, 64, read_buf);
+
+    // --- Verify ---
+    int match = (strcmp(read_buf, write_buf) == 0);
+    ST7789_WriteString(5, 90, match ? "Data: MATCH" : "Data: MISMATCH",
+                       Font_7x10, match ? GREEN : RED, BLACK);
+
+    // Show what was read back
+    ST7789_WriteString(5, 115, "Got:", Font_7x10, WHITE, BLACK);
+    ST7789_WriteString(5, 130, read_buf, Font_7x10, YELLOW, BLACK);
+
+    f_unmount("");
+}
+
+void sd_image_test(void) {
+    FIL file;
+    FRESULT res;
+    UINT br;
+    char status[32];
+
+
+
+    #define IMG_W 128
+    #define IMG_H 128
+    // Read one row at a time to avoid needing 32KB of RAM at once
+    static uint16_t row_buf[IMG_W];
+
+    ST7789_Fill_Color(BLACK);
+    ST7789_WriteString(5, 5, "Image Test", Font_11x18, WHITE, BLACK);
+
+    res = f_open(&file, "/TEST.RAW", FA_READ);
+    snprintf(status, sizeof(status), "Open: %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
+    ST7789_WriteString(5, 30, status, Font_7x10, res == FR_OK ? GREEN : RED, BLACK);
+    if (res != FR_OK) return;
+
+    // Check file size is what we expect
+    FSIZE_t expected = IMG_W * IMG_H * 2;
+    FSIZE_t actual   = f_size(&file);
+    snprintf(status, sizeof(status), "Size: %s", actual == expected ? "OK" : "WRONG");
+    ST7789_WriteString(5, 45, status, Font_7x10, actual == expected ? GREEN : RED, BLACK);
+
+    HAL_Delay(500); // let the status text show before image overwrites it
+
+    // Draw row by row directly to display
+    for (int y = 0; y < IMG_H; y++) {
+        res = f_read(&file, row_buf, sizeof(row_buf), &br);
+        if (res != FR_OK || br != sizeof(row_buf)) {
+            ST7789_WriteString(5, 110, "Read error!", Font_7x10, RED, BLACK);
+            break;
+        }
+        ST7789_DrawImage(0, y, IMG_W, 1, row_buf);
+    }
+
+    f_close(&file);
+    ST7789_WriteString(5, 115, "Done!", Font_7x10, GREEN, BLACK);
+}
+
 int main(void) {
     HAL_Init();
     __enable_irq();
@@ -105,23 +239,43 @@ int main(void) {
 
     host_serial_init();
     display_gpio_init();
+    sdCard_gpio_init();
     spi_init();
-
     ST7789_Init();
-    ST7789_Fill_Color(RED);
+    
+   // FATFS fs;
 
-    // while (1) {
-    //     ST7789_Fill_Color(RED);
-    // }
+    //BSP_SD_Init();
+    SD_IO_Init();
+
+   // sd_display_test();
+
+   FATFS fs;
+if (f_mount(&fs, "", 1) == FR_OK) {
+    sd_display_test();
+} else {
+    ST7789_Fill_Color(BLACK);
+    ST7789_WriteString(5, 5, "Mount failed!", Font_11x18, RED, BLACK);
+}
+
+// if (f_mount(&fs, "", 1) != FR_OK) {
+//     printf("FAIL: f_mount\n");
+// } else {
+//     printf("OK: mounted\n");
+//     sd_read_write_test();
+// }
+
+   // display_jpeg("/IMAGE.JPG"); // display a JPEG from the SD card
+
+   // f_unmount("");
+
+   // ST7789_Test();
 
     while (1) {
-    ST7789_Init();
-    ST7789_Fill_Color(RED);
+    //ST7789_DrawImage(0, 0, 128, 128, saber);
+    HAL_Delay(500);
 
-    printf("reach here\n");
-    HAL_Delay(500);
-    ST7789_Fill_Color(BLUE);
-    HAL_Delay(500);
+
 }
 }
 
