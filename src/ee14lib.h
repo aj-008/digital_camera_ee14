@@ -31,10 +31,22 @@ typedef int EE14Lib_Err;
 #define PULL_DOWN 0b10
 // Both on is an error
 
+// GPIO output type modes
+#define PUSH_PULL 0b0
+#define OPEN_DRAIN 0b1
+
+// GPIO output speed types
+#define LOW_SPD 0b00
+#define MED_SPD 0b01
+#define HI_SPD  0b10
+#define V_HI_SPD 0b11
+
 EE14Lib_Err gpio_config_mode(EE14Lib_Pin pin, unsigned int mode);
 EE14Lib_Err gpio_config_pullup(EE14Lib_Pin pin, unsigned int mode);
 EE14Lib_Err gpio_config_direction(EE14Lib_Pin pin, unsigned int direction);
 EE14Lib_Err gpio_config_alternate_function(EE14Lib_Pin pin, unsigned int function);
+EE14Lib_Err gpio_config_otype(EE14Lib_Pin pin, unsigned int otype);
+EE14Lib_Err gpio_config_ospeed(EE14Lib_Pin pin, unsigned int ospeed);
 void gpio_write(EE14Lib_Pin pin, bool value);
 bool gpio_read(EE14Lib_Pin pin);
 

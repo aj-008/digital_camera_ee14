@@ -156,3 +156,27 @@ bool gpio_read(EE14Lib_Pin pin)
     return (port->IDR >> pin_offset) & 1UL;
 }
 
+// Configure the output type of a GPIO pin, either push/pull or open-drain.
+// A push-pull output is driven both high and low (connection to Vdd or GND),
+// while an open-drain input is driven only to ground, and left floating
+// otherwise.  A pullup (internal or external) is used to achieve the high value
+// when the output is not driven low.
+//   pin: A Nucleo pin ID (D2, A4, etc.)
+//   otype: Either PUSH_PULL (0b0) or OPEN_DRAIN (0b01)
+// Returns EE14Lib_ERR_INVALID_CONFIG for invalid otype value, otherwise
+// returns EE14Lib_Err_OK.
+EE14Lib_Err gpio_config_otype(EE14Lib_Pin pin, unsigned int otype)
+{
+    GPIO_TypeDef* port = g_GPIO_port[pin];
+    uint8_t pin_offset = g_GPIO_pin[pin];
+
+    if(otype & ~0b1UL){ // Only bottom bit is valid
+        return EE14Lib_ERR_INVALID_CONFIG;
+    }
+
+    port->OTYPER &= ~(0b1 << pin_offset); // Clear mode bit
+    port->OTYPER |=  (otype << pin_offset);
+
+    return EE14Lib_Err_OK;
+}
+

@@ -5,6 +5,7 @@ EE14Lib_Err i2c_init(I2C_TypeDef* i2c, EE14Lib_Pin scl, EE14Lib_Pin sda)
     // Configure GPIO pins for I2C: open-drain and internal pullup
     gpio_config_otype(scl, OPEN_DRAIN);
     gpio_config_otype(sda, OPEN_DRAIN);
+
     // Enable "fast mode plus" on the I2C I/O pins
     SYSCFG->CFGR1 |= SYSCFG_CFGR1_I2C1_FMP;
 
