@@ -195,8 +195,6 @@ void sd_image_test(void) {
     UINT br;
     char status[32];
 
-
-
     #define IMG_W 128
     #define IMG_H 128
     // Read one row at a time to avoid needing 32KB of RAM at once
@@ -232,6 +230,7 @@ void sd_image_test(void) {
     ST7789_WriteString(5, 115, "Done!", Font_7x10, GREEN, BLACK);
 }
 
+
 int main(void) {
     HAL_Init();
     __enable_irq();
@@ -252,7 +251,8 @@ int main(void) {
 
    FATFS fs;
 if (f_mount(&fs, "", 1) == FR_OK) {
-    sd_display_test();
+    list_sd_root();
+    jpeg_test();
 } else {
     ST7789_Fill_Color(BLACK);
     ST7789_WriteString(5, 5, "Mount failed!", Font_11x18, RED, BLACK);

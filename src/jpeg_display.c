@@ -1,12 +1,10 @@
 #include "jpeg_display.h"
+#include "st7789.h"
+#include <stdio.h>
 
-typedef struct {
-    FIL *file;
-    uint16_t x_offset;
-    uint16_t y_offset;
-} jpeg_dev_t;
 
-static size_t jpeg_input(JDEC *jd, uint8_t *buf, size_t nd) {
+
+size_t jpeg_input(JDEC *jd, uint8_t *buf, size_t nd) {
     jpeg_dev_t *dev = (jpeg_dev_t*)jd->device;
     UINT rb = 0;
     if (buf) {
@@ -17,17 +15,13 @@ static size_t jpeg_input(JDEC *jd, uint8_t *buf, size_t nd) {
     return nd;
 }
 
-static int jpeg_output(JDEC *jd, void *bitmap, JRECT *rect) {
+int jpeg_output(JDEC *jd, void *bitmap, JRECT *rect) {
     jpeg_dev_t *dev = (jpeg_dev_t*)jd->device;
     uint16_t *pixels = (uint16_t*)bitmap;
 
-    
-
     for (uint16_t y = rect->top; y <= rect->bottom; y++) {
         for (uint16_t x = rect->left; x <= rect->right; x++) {
-            uint16_t color = *pixels++;
-            // Replace this with your actual TFT draw call:
-            // TFT_DrawPixel(dev->x_offset + x, dev->y_offset + y, color);
+            ST7789_DrawPixel(dev->x_offset + x, dev->y_offset + y, *pixels++);
         }
     }
     return 1;
@@ -38,15 +32,49 @@ void display_jpeg(const char *path) {
     JDEC jdec;
     FIL file;
     jpeg_dev_t dev;
+    char status[32];
+    int y_pos = 5;
 
-    if (f_open(&file, path, FA_READ) != FR_OK) return;
+    ST7789_Fill_Color(BLACK);
+
+    // --- Open ---
+    FRESULT fres = f_open(&file, path, FA_READ);
+    snprintf(status, sizeof(status), "Open: %d", fres);
+    ST7789_WriteString(5, y_pos, status, Font_7x10, fres == FR_OK ? GREEN : RED, BLACK);
+    y_pos += 15;
+    if (fres != FR_OK) return;
+
+    snprintf(status, sizeof(status), "Size: %lu", (uint32_t)f_size(&file));
+    ST7789_WriteString(5, y_pos, status, Font_7x10, WHITE, BLACK);
+    y_pos += 15;
 
     dev.file     = &file;
     dev.x_offset = 0;
     dev.y_offset = 0;
 
-    if (jd_prepare(&jdec, jpeg_input, work, sizeof(work), &dev) == JDR_OK) {
-        jd_decomp(&jdec, jpeg_output, 0);
+    // --- Prepare ---
+    JRESULT jres = jd_prepare(&jdec, jpeg_input, work, sizeof(work), &dev);
+    snprintf(status, sizeof(status), "Prepare: %d", jres);
+    ST7789_WriteString(5, y_pos, status, Font_7x10, jres == JDR_OK ? GREEN : RED, BLACK);
+    y_pos += 15;
+    if (jres != JDR_OK) {
+        f_close(&file);
+        return;
+    }
+
+    // --- Show dimensions ---
+    snprintf(status, sizeof(status), "Dim: %dx%d", jdec.width, jdec.height);
+    ST7789_WriteString(5, y_pos, status, Font_7x10, YELLOW, BLACK);
+    y_pos += 15;
+
+    HAL_Delay(2000); // read the status before image draws over it
+
+    // --- Decompress ---
+    ST7789_Fill_Color(BLACK);
+    jres = jd_decomp(&jdec, jpeg_output, 0);
+    if (jres != JDR_OK) {
+        snprintf(status, sizeof(status), "Decomp: %d", jres);
+        ST7789_WriteString(5, 5, status, Font_7x10, RED, BLACK);
     }
 
     f_close(&file);
