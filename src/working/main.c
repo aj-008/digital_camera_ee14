@@ -382,18 +382,20 @@ static void draw_menu(int sd_ok) {
     draw_string(82, 12, "DIGICAM", WHITE, BLACK, 3);
 
     uint16_t gcol = sd_ok ? WHITE : GRAY;
-    ST7789_DrawRectangle(14, 52, 144, 168, gcol);
-    draw_icon_gallery(34, 58, gcol);
-    draw_string(28, 148, "GALLERY", gcol, BLACK, 2);
+
+
+    ST7789_DrawRectangle(176, 52, 306, 168, gcol);
+    draw_icon_gallery(196, 58, gcol);
+    draw_string(188, 148, "GALLERY", gcol, BLACK, 2);
     draw_string(20, 166, "PRESS ", gcol, BLACK, 1);
-    draw_string(56, 166, "BLUE", sd_ok ? BLUE : GRAY, BLACK, 1);
+    draw_string(216, 166, "RED", RED, BLACK, 1);
     draw_string(80, 166, " BUTTON", gcol, BLACK, 1);
 
-    ST7789_DrawRectangle(176, 52, 306, 168, WHITE);
-    draw_icon_camera(196, 58, WHITE);
-    draw_string(188, 148, "CAMERA", WHITE, BLACK, 2);
+    ST7789_DrawRectangle(14, 52, 144, 168, WHITE);
+    draw_icon_camera(34, 58, WHITE);
+    draw_string(28, 148, "CAMERA", WHITE, BLACK, 2);
     draw_string(180, 166, "PRESS ", WHITE, BLACK, 1);
-    draw_string(216, 166, "RED", RED, BLACK, 1);
+    draw_string(56, 166, "BLUE", sd_ok ? BLUE : GRAY, BLACK, 1);
     draw_string(245, 166, " BUTTON", WHITE, BLACK, 1);
 }
 
