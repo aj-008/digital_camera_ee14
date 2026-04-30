@@ -122,8 +122,8 @@ static void SystemClock_Config(void) {
  * straight to the ST7789 via ST7789_DrawImage().
  * ----------------------------------------------------------------------- */
 
-/* RAM buffer for JPEG — fits largest expected frame (320x240 JPEG ~8KB max) */
-static uint8_t jpeg_buf[10240];
+/* RAM buffer — 320x240 JPEG typically 4-10KB */
+static uint8_t jpeg_buf[12288];
 static uint32_t jpeg_buf_len;
 static uint32_t jpeg_buf_pos;
 
