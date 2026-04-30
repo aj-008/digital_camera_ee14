@@ -1,281 +1,361 @@
-#include "stm32l4xx_hal.h"
-#include "st7789.h"
+#include "stm32l432xx.h"
 #include "ee14lib.h"
+#include "spi.h"
+#include "camera.h"
+#include "st7789.h"
 #include "ff.h"
-#include "stm32_adafruit_sd.h"   // BSP_SD_Init
-#include "ff.h"                   // FATFS, f_mount
-#include "jpeg_display.h" 
-#include "fonts.h"
+#include "stm32_adafruit_sd.h"
+#include "tjpgd.h"
+#include <string.h>
+#include <stdint.h>
 #include <stdio.h>
 
-#define SCL D13  // PB3 - SPI1_SCK  AF5
-#define SDA D11  // PB5 - SPI1_MOSI AF5
-#define RES D9   // PA8
-#define DC  D6   // PB1
-#define CS  A3   // PA4
+/* HAL tick counter — used only by HAL_GetTick() if anything calls it.
+   We drive it from SysTick ourselves. */
+static volatile uint32_t g_tick = 0;
+uint32_t HAL_GetTick(void) { return g_tick; }
 
+/* -----------------------------------------------------------------------
+ * Pin assignments (quick reference)
+ *
+ *  SPI1 — camera + display (PA5/PA6/PA7, AF5)
+ *    SCK   PA5  A4
+ *    MISO  PA6  A5
+ *    MOSI  PA7  A6
+ *    CAM_CS   PA8  D9
+ *    LCD_CS   PA11 D10
+ *
+ *  SPI3 — SD card only (PB3/PB4/PB5, AF6)
+ *    SCK   PB3  D13
+ *    MISO  PB4  D12
+ *    MOSI  PB5  D11
+ *    SD_CS    PA12 D2
+ *
+ *  LCD control
+ *    LCD_DC   PB0  D3
+ *    LCD_RST  PB1  D6
+ *
+ *  I2C1 (OV2640 SCCB)
+ *    SCL  PB6  D5  AF4
+ *    SDA  PB7  D4  AF4
+ *
+ *  UART2 (debug / JPEG host dump)
+ *    TX   PA2  A7  AF7  -> ST-Link VCP
+ *    RX   PA15     AF3
+ *
+ *  Shutter button
+ *    A0   PA0       active-low, internal pull-up
+ * ----------------------------------------------------------------------- */
+
+#define SHUTTER_PIN  A0
+
+/* -----------------------------------------------------------------------
+ * SysTick — bare-metal 1 ms tick
+ * ----------------------------------------------------------------------- */
+void SysTick_Handler(void) { g_tick++; }
+
+/* -----------------------------------------------------------------------
+ * Serial helpers
+ * ----------------------------------------------------------------------- */
+static void print(const char *msg) {
+    serial_write(USART2, msg, (int)strlen(msg));
+}
+
+/* Retarget printf → USART2 */
 int _write(int file, char *data, int len) {
+    (void)file;
     serial_write(USART2, data, len);
     return len;
 }
 
-void SysTick_Handler(void) {
-    HAL_IncTick();
+/* -----------------------------------------------------------------------
+ * Delay — uses SysTick g_tick (1 ms resolution)
+ * ----------------------------------------------------------------------- */
+static void delay_ms(uint32_t ms) {
+    uint32_t start = g_tick;
+    while ((g_tick - start) < ms);
 }
 
-SPI_HandleTypeDef hspi1;
-
-/*
-Some of this code is just repeated from GPIO definitions, but I deleted some and everything
-stopped working so didn't want to try, but will clean at some point
-*/
-void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_SPI1_CLK_ENABLE();
-
-    // PB3 = SPI1_SCK, PB5 = SPI1_MOSI, both AF5
-    GPIO_InitStruct.Pin       = GPIO_PIN_3 | GPIO_PIN_5;
-    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull      = GPIO_NOPULL;
-    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-}
-
-//Clock config
+/* -----------------------------------------------------------------------
+ * Clock — 80 MHz via MSI PLL, bare-metal registers
+ *
+ * MSI @ 4 MHz (range 6) → PLL → SYSCLK = 4 * 40 / (1*2) = 80 MHz
+ * HCLK = PCLK1 = PCLK2 = 80 MHz, Flash latency = 4 WS
+ * ----------------------------------------------------------------------- */
 static void SystemClock_Config(void) {
+    /* 1. Boost Flash latency to 4 WS before increasing clock speed */
+    FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY) | FLASH_ACR_LATENCY_4WS;
+    while ((FLASH->ACR & FLASH_ACR_LATENCY) != FLASH_ACR_LATENCY_4WS);
 
-    //This RCC code basically makes it 80MHz, was there a better way we learned in class to do this?
-    //Idk whats even happening, code still works without it but loads frames slower (4 MHz vs 80 MHz?)
-    //Can maybe be fixed by shortening HAL_Delay() calls?
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    /* 2. Enable MSI, set range 6 (4 MHz) */
+    RCC->CR |= RCC_CR_MSION;
+    while (!(RCC->CR & RCC_CR_MSIRDY));
+    RCC->CR  = (RCC->CR & ~RCC_CR_MSIRANGE) | RCC_CR_MSIRANGE_6 | RCC_CR_MSIRGSEL;
 
-    RCC_OscInitStruct.OscillatorType      = RCC_OSCILLATORTYPE_MSI;
-    RCC_OscInitStruct.MSIState            = RCC_MSI_ON;
-    RCC_OscInitStruct.MSICalibrationValue = 0;
-    RCC_OscInitStruct.MSIClockRange       = RCC_MSIRANGE_6;
-    RCC_OscInitStruct.PLL.PLLState        = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource       = RCC_PLLSOURCE_MSI;
-    RCC_OscInitStruct.PLL.PLLM            = 1;
-    RCC_OscInitStruct.PLL.PLLN            = 40;
-    RCC_OscInitStruct.PLL.PLLR            = RCC_PLLR_DIV2;
-    HAL_RCC_OscConfig(&RCC_OscInitStruct);
+    /* 3. Configure PLL: source=MSI, M=1, N=40, R=2 → 80 MHz */
+    RCC->PLLCFGR = RCC_PLLCFGR_PLLSRC_MSI          /* MSI source */
+                 | (0U  << RCC_PLLCFGR_PLLM_Pos)   /* M = 1 (field = 0) */
+                 | (40U << RCC_PLLCFGR_PLLN_Pos)   /* N = 40 */
+                 | (0U  << RCC_PLLCFGR_PLLR_Pos)   /* R = 2 (field = 0) */
+                 | RCC_PLLCFGR_PLLREN;              /* enable R output */
 
-    RCC_ClkInitStruct.ClockType      = RCC_CLOCKTYPE_HCLK  | RCC_CLOCKTYPE_SYSCLK
-                                     | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-   HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4);
+    /* 4. Enable PLL and wait */
+    RCC->CR |= RCC_CR_PLLON;
+    while (!(RCC->CR & RCC_CR_PLLRDY));
 
-    //THIS IS NEEDED, makes systick work :)
-    HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq() / 1000);
-    HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+    /* 5. Switch SYSCLK to PLL */
+    RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL);
+
+    /* 6. Update SystemCoreClock global used by serial.c for BRR calculation */
+    SystemCoreClock = 80000000UL;
+
+    /* 7. SysTick at 1 ms */
+    SysTick_Config(SystemCoreClock / 1000);
 }
 
-static void spi_init(void) {
-    __HAL_RCC_SPI1_CLK_ENABLE();
-    hspi1.Instance               = SPI1;
-    hspi1.Init.Mode              = SPI_MODE_MASTER;
-    hspi1.Init.Direction         = SPI_DIRECTION_2LINES;
-    hspi1.Init.DataSize          = SPI_DATASIZE_8BIT;
-    hspi1.Init.CLKPolarity       = SPI_POLARITY_LOW;
-    hspi1.Init.CLKPhase          = SPI_PHASE_1EDGE;
-    hspi1.Init.NSS               = SPI_NSS_SOFT;
-    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
-    hspi1.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-    hspi1.Init.TIMode            = SPI_TIMODE_DISABLE;
-    hspi1.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
-    HAL_SPI_Init(&hspi1);  // this triggers HAL_SPI_MspInit above
+/* -----------------------------------------------------------------------
+ * TJpgDec integration
+ *
+ * We decode the JPEG that lives in the ArduChip FIFO directly via SPI,
+ * streaming through a 512-byte input buffer, and blit each MCU block
+ * straight to the ST7789 via ST7789_DrawImage().
+ * ----------------------------------------------------------------------- */
+
+/* RAM buffer for JPEG — fits largest expected frame (320x240 JPEG ~8KB max) */
+static uint8_t jpeg_buf[10240];
+static uint32_t jpeg_buf_len;
+static uint32_t jpeg_buf_pos;
+
+/* TJpgDec input function: read from RAM buffer (SPI already closed) */
+static size_t jpeg_input(JDEC *jd, uint8_t *buf, size_t ndata) {
+    (void)jd;
+    if (jpeg_buf_pos >= jpeg_buf_len) return 0;
+    if (ndata > jpeg_buf_len - jpeg_buf_pos)
+        ndata = jpeg_buf_len - jpeg_buf_pos;
+    memcpy(buf, jpeg_buf + jpeg_buf_pos, ndata);
+    jpeg_buf_pos += ndata;
+    return ndata;
 }
 
-/*
-Display:
-MOSI(SDA) - D11 - PB5 - SPI1 (shares with SD Card Reader)
-SCL - D13 - PB3 - SPI1 (Shares with SD Card Reader)
-RES(reset) - D9 - PA8
-DC (data/command) - D6 - PB1
-CS - A3 - PA4 
-*/
-static void display_gpio_init(void) {
-    gpio_config_alternate_function(D13, 5);
-    gpio_config_alternate_function (D11, 5);
-
-    gpio_config_direction(D9, OUTPUT);
-    gpio_config_direction(D6, OUTPUT);
-    gpio_config_direction(A3, OUTPUT);
-
-    gpio_write(A3, 1);
-    gpio_write(D9, 1);
+/* TJpgDec output function: blit MCU block to display.
+ * TJpgDec produces RGB565 as little-endian uint16_t on ARM (low byte first
+ * in memory). ST7789 expects big-endian over SPI (high byte first).
+ * Swap each pixel's bytes before writing.                               */
+static int jpeg_output(JDEC *jd, void *bitmap, JRECT *rect) {
+    (void)jd;
+    uint16_t *px = (uint16_t *)bitmap;
+    uint32_t npix = (uint32_t)(rect->right  - rect->left + 1)
+                  * (uint32_t)(rect->bottom - rect->top  + 1);
+    for (uint32_t i = 0; i < npix; i++) {
+        uint16_t v = px[i];
+        px[i] = (v << 8) | (v >> 8);  /* swap bytes */
+    }
+    ST7789_DrawImage(rect->left, rect->top,
+                     rect->right  - rect->left + 1,
+                     rect->bottom - rect->top  + 1,
+                     px);
+    return 1;
 }
 
-/* 
-SD Card:
-MOSI - D11 - PB5 - SPI1 (shares with SDA on display)
-MISO - D12 - PB4 - SPI1
-SCK - D13 - PB3 - SPI1 (shares with SCL on display)
-CS - A0 - PA0 - Not on SPI
-*/
-static void sdCard_gpio_init() {
-    gpio_config_alternate_function(D12, 5);
+/* Decode JPEG from ArduChip FIFO and display it */
+static void display_jpeg_from_fifo(void) {
+    /* Reset read pointer, then read length twice to ensure stability */
+    camera_fifo_reset_rdptr();
+    uint32_t length = camera_fifo_length();
+    uint32_t length2 = camera_fifo_length();
+    /* If the two reads disagree, take the larger one */
+    if (length2 > length) length = length2;
 
-    gpio_config_direction(A0, OUTPUT);
-    gpio_write(A0, 1);
-}
-
-
-void sd_display_test(void) {
-    FIL file;
-    FRESULT res;
-    UINT bw, br;
-   /// char write_buf[] = "Hello from STM32!";
-    char read_buf[64*64] = {0};
-    char status[32];
-
-    char write_buf[64*64];
-
-
-    for (int y = 0; y < 64; y++)
+    /* Print length regardless of validity */
     {
-        for (int x = 0; x < 64; x++)
-        {
-            if ((x + y) % 2 == 0)
-                write_buf[(y*64)+x] = 0xAB; // black
-            else
-                write_buf[(y*64)+x] = 0xCD; // white
-        }
+        char lb[12];
+        lb[0]='L'; lb[1]='E'; lb[2]='N'; lb[3]='=';
+        uint32_t v = length;
+        for (int i = 9; i >= 4; i--) { lb[i]='0'+(v%10); v/=10; }
+        lb[10]='\r'; lb[11]='\n';
+        serial_write(USART2, lb, 12);
     }
 
-    ST7789_Fill_Color(BLACK);
-    ST7789_WriteString(5, 5, "SD Card Test", Font_11x18, WHITE, BLACK);
-
-    // --- Mount ---
-    FATFS fs;
-    res = f_mount(&fs, "", 1);
-    snprintf(status, sizeof(status), "Mount: %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
-    ST7789_WriteString(5, 30, status, Font_7x10, res == FR_OK ? GREEN : RED, BLACK);
-    if (res != FR_OK) return;
-
-    // --- Write ---
-    res = f_open(&file, "/TEST.TXT", FA_CREATE_ALWAYS | FA_WRITE);
-    res = f_write(&file, write_buf, sizeof(write_buf), &bw);
-    f_close(&file);
-    snprintf(status, sizeof(status), "Write: %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
-    
-
-    //ST7789_DrawImage(0, 0, 128, 128, saber);
-
-    // --- Read ---
-    res = f_open(&file, "/TEST.TXT", FA_READ);
-    res = f_read(&file, read_buf, sizeof(read_buf) - 1, &br);
-    f_close(&file);
-    snprintf(status, sizeof(status), "Read:  %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
-    //ST7789_WriteString(5, 70, status, Font_7x10, res == FR_OK ? GREEN : RED, BLACK);
-    ST7789_DrawImage(160, 0, 64, 64, read_buf);
-
-    // --- Verify ---
-    int match = (strcmp(read_buf, write_buf) == 0);
-    ST7789_WriteString(5, 90, match ? "Data: MATCH" : "Data: MISMATCH",
-                       Font_7x10, match ? GREEN : RED, BLACK);
-
-    // Show what was read back
-    ST7789_WriteString(5, 115, "Got:", Font_7x10, WHITE, BLACK);
-    ST7789_WriteString(5, 130, read_buf, Font_7x10, YELLOW, BLACK);
-
-    f_unmount("");
-}
-
-void sd_image_test(void) {
-    FIL file;
-    FRESULT res;
-    UINT br;
-    char status[32];
-
-    #define IMG_W 128
-    #define IMG_H 128
-    // Read one row at a time to avoid needing 32KB of RAM at once
-    static uint16_t row_buf[IMG_W];
-
-    ST7789_Fill_Color(BLACK);
-    ST7789_WriteString(5, 5, "Image Test", Font_11x18, WHITE, BLACK);
-
-    res = f_open(&file, "/TEST.RAW", FA_READ);
-    snprintf(status, sizeof(status), "Open: %s (%d)", res == FR_OK ? "OK" : "FAIL", res);
-    ST7789_WriteString(5, 30, status, Font_7x10, res == FR_OK ? GREEN : RED, BLACK);
-    if (res != FR_OK) return;
-
-    // Check file size is what we expect
-    FSIZE_t expected = IMG_W * IMG_H * 2;
-    FSIZE_t actual   = f_size(&file);
-    snprintf(status, sizeof(status), "Size: %s", actual == expected ? "OK" : "WRONG");
-    ST7789_WriteString(5, 45, status, Font_7x10, actual == expected ? GREEN : RED, BLACK);
-
-    HAL_Delay(500); // let the status text show before image overwrites it
-
-    // Draw row by row directly to display
-    for (int y = 0; y < IMG_H; y++) {
-        res = f_read(&file, row_buf, sizeof(row_buf), &br);
-        if (res != FR_OK || br != sizeof(row_buf)) {
-            ST7789_WriteString(5, 110, "Read error!", Font_7x10, RED, BLACK);
-            break;
-        }
-        ST7789_DrawImage(0, y, IMG_W, 1, row_buf);
+    if (length == 0 || length > sizeof(jpeg_buf) - 1) {
+        print("ERR: bad fifo length\r\n");
+        return;
     }
 
-    f_close(&file);
-    ST7789_WriteString(5, 115, "Done!", Font_7x10, GREEN, BLACK);
+    /* Read entire FIFO into RAM.
+     * We read length+1 bytes: slot 0 reserved for synthetic FF if needed,
+     * slots 1..length hold raw FIFO bytes.
+     * CS deasserted before any display SPI transactions.                */
+    uint32_t read_len = length;
+    if (read_len > sizeof(jpeg_buf) - 1) read_len = sizeof(jpeg_buf) - 1;
+
+    spi_cs_low(CAM_CS);
+    spi_transfer(ARDUCHIP_BURST_FIFO);
+    spi_transfer(0x00);  /* dummy byte */
+    spi_transfer_buf(NULL, jpeg_buf + 1, (uint16_t)read_len);
+    spi_cs_high(CAM_CS);
+
+    /* Check alignment and fix 1-byte offset */
+    uint8_t *jpeg_start;
+    if (jpeg_buf[1] == 0xFF && jpeg_buf[2] == 0xD8) {
+        jpeg_start = jpeg_buf + 1;
+        jpeg_buf_len = read_len;
+    } else if (jpeg_buf[1] == 0xD8 && jpeg_buf[2] == 0xFF) {
+        jpeg_buf[0] = 0xFF;
+        jpeg_start = jpeg_buf;
+        jpeg_buf_len = read_len + 1;
+    } else {
+        char dbg[20];
+        dbg[0]='H'; dbg[1]='D'; dbg[2]='R'; dbg[3]='=';
+        const char *hx = "0123456789ABCDEF";
+        for (int i = 0; i < 4; i++) {
+            dbg[4+i*3]   = hx[jpeg_buf[1+i]>>4];
+            dbg[4+i*3+1] = hx[jpeg_buf[1+i]&0xF];
+            dbg[4+i*3+2] = ' ';
+        }
+        dbg[16]='\r'; dbg[17]='\n';
+        serial_write(USART2, dbg, 18);
+        print("ERR: no JPEG SOI marker\r\n");
+        return;
+    }
+
+    /* Set up RAM-based input */
+    jpeg_buf_pos = 0;
+    /* Temporarily point jpeg_input to jpeg_start */
+    /* We use a static pointer since jpeg_input reads from globals */
+    /* Shift so jpeg_buf always starts at index 0 for the input fn */
+    if (jpeg_start != jpeg_buf) {
+        memmove(jpeg_buf, jpeg_start, jpeg_buf_len);
+    }
+    jpeg_buf_pos = 0;
+
+    /* Decode */
+    static uint8_t work[8192];
+    JDEC jdec;
+    JRESULT res = jd_prepare(&jdec, jpeg_input, work, sizeof(work), NULL);
+    if (res != JDR_OK) {
+        print("ERR: jd_prepare failed\r\n");
+        return;
+    }
+    res = jd_decomp(&jdec, jpeg_output, 0);
+    if (res != JDR_OK) {
+        char errmsg[24] = "ERR: jd_decomp rc=0x";
+        const char *hx2 = "0123456789ABCDEF";
+        errmsg[20] = hx2[(res>>4)&0xF];
+        errmsg[21] = hx2[res&0xF];
+        errmsg[22] = '\r'; errmsg[23] = '\n';
+        serial_write(USART2, errmsg, 24);
+    }
 }
 
+/* -----------------------------------------------------------------------
+ * FatFS + SD: save JPEG to file
+ * ----------------------------------------------------------------------- */
+static FATFS fs;
+static uint32_t file_counter = 0;
 
+static int sd_mount(void) {
+    FRESULT fr = f_mount(&fs, "", 1);
+    return (fr == FR_OK) ? 0 : -1;
+}
+
+static int save_jpeg_to_sd(void) {
+    /* jpeg_buf is already populated by display_jpeg_from_fifo — write it directly */
+    if (jpeg_buf_len == 0) return -1;
+
+    char fname[24];
+    snprintf(fname, sizeof(fname), "IMG%04lu.JPG", (unsigned long)file_counter++);
+
+    FIL fil;
+    FRESULT fr = f_open(&fil, fname, FA_CREATE_ALWAYS | FA_WRITE);
+    if (fr != FR_OK) return -1;
+
+    UINT bw;
+    fr = f_write(&fil, jpeg_buf, (UINT)jpeg_buf_len, &bw);
+    f_close(&fil);
+
+    if (fr == FR_OK && bw == (UINT)jpeg_buf_len) {
+        print("saved: "); print(fname); print("\r\n");
+        return 0;
+    }
+    return -1;
+}
+
+/* -----------------------------------------------------------------------
+ * Capture, display, and save
+ * ----------------------------------------------------------------------- */
+static void do_capture(int sd_ok) {
+    print("capturing...\r\n");
+    if (camera_capture() != 0) {
+        print("ERR: capture timeout\r\n");
+        return;
+    }
+    print("captured. decoding...\r\n");
+
+    /* Reads FIFO into jpeg_buf, decodes to display */
+    display_jpeg_from_fifo();
+
+    /* jpeg_buf now holds the complete JPEG — save it */
+    if (sd_ok)
+        save_jpeg_to_sd();
+
+    print("done.\r\n");
+}
+
+/* -----------------------------------------------------------------------
+ * main
+ * ----------------------------------------------------------------------- */
 int main(void) {
-    HAL_Init();
     __enable_irq();
     SystemClock_Config();
-
     host_serial_init();
-    display_gpio_init();
-    sdCard_gpio_init();
-    spi_init();
+    print("boot\r\n");
+
+    /* ── Pre-deassert all SPI CS lines BEFORE spi_init() ────────────────*/
+    gpio_config_mode(CAM_CS,     OUTPUT); spi_cs_high(CAM_CS);
+    gpio_config_mode(LCD_CS_PIN, OUTPUT); spi_cs_high(LCD_CS_PIN);
+    gpio_config_mode(SD_CS,      OUTPUT); spi_cs_high(SD_CS);
+
+    /* ── Bus init ────────────────────────────────────────────────────── */
+    spi_init();    /* SPI1: PA5/PA6/PA7 — camera + display */
+    /* SPI3 (SD) is initialised inside SD_IO_Init() via sd_io.c         */
+
+    /* ── Camera first — self-test before SD touches the bus ─────────── */
+    if (camera_init() != 0) {
+        print("ERR: camera_init failed\r\n");
+        while (1);
+    }
+    print("camera ok\r\n");
+
+    /* ── Display ─────────────────────────────────────────────────────── */
+    ST7789_GPIO_Init();
     ST7789_Init();
-    
-   // FATFS fs;
-
-    //BSP_SD_Init();
-    SD_IO_Init();
-
-   // sd_display_test();
-
-   FATFS fs;
-if (f_mount(&fs, "", 1) == FR_OK) {
-    list_sd_root();
-    jpeg_test();
-} else {
     ST7789_Fill_Color(BLACK);
-    ST7789_WriteString(5, 5, "Mount failed!", Font_11x18, RED, BLACK);
-}
+    print("display ok\r\n");
 
-// if (f_mount(&fs, "", 1) != FR_OK) {
-//     printf("FAIL: f_mount\n");
-// } else {
-//     printf("OK: mounted\n");
-//     sd_read_write_test();
-// }
+    /* ── SD card last — BSP_SD_Init clocks out the 80 dummy bytes that
+     * release MISO. Camera is already verified before this runs.        */
+    int sd_ok = 0;
+    if (sd_mount() == 0) {
+        sd_ok = 1;
+        print("SD ok\r\n");
+    } else {
+        print("SD not found — continuing without SD\r\n");
+    }
 
-   // display_jpeg("/IMAGE.JPG"); // display a JPEG from the SD card
+    /* ── Shutter button ──────────────────────────────────────────────── */
+    gpio_config_mode(SHUTTER_PIN, INPUT);
+    gpio_config_pullup(SHUTTER_PIN, PULL_UP);
+    print("ready. press A0 to capture.\r\n");
 
-   // f_unmount("");
-
-   // ST7789_Test();
-
+    /* ── Main loop ───────────────────────────────────────────────────── */
     while (1) {
-    //ST7789_DrawImage(0, 0, 128, 128, saber);
-    HAL_Delay(500);
-
-
+        if (!gpio_read(SHUTTER_PIN)) {
+            delay_ms(50);                        /* debounce */
+            if (gpio_read(SHUTTER_PIN)) continue;
+            do_capture(sd_ok);
+            while (!gpio_read(SHUTTER_PIN));     /* wait for release */
+            delay_ms(500);                       /* anti-bounce hold-off */
+        }
+    }
 }
-}
-
