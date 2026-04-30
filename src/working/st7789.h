@@ -28,11 +28,11 @@
 
 /* ── Display geometry ────────────────────────────────────────────────── */
 #define USING_240X320
-#define ST7789_ROTATION  2
+#define ST7789_ROTATION  1   /* landscape: 320 wide x 240 tall */
 
 #ifdef USING_240X320
-  #define ST7789_WIDTH   240
-  #define ST7789_HEIGHT  320
+  #define ST7789_WIDTH   320
+  #define ST7789_HEIGHT  240
   #define X_SHIFT        0
   #define Y_SHIFT        0
 #endif

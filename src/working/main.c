@@ -122,8 +122,8 @@ static void SystemClock_Config(void) {
  * straight to the ST7789 via ST7789_DrawImage().
  * ----------------------------------------------------------------------- */
 
-/* RAM buffer for JPEG — fits largest expected frame (320x240 JPEG ~8KB max) */
-static uint8_t jpeg_buf[10240];
+/* RAM buffer — 320x240 JPEG typically 4-10KB */
+static uint8_t jpeg_buf[12288];
 static uint32_t jpeg_buf_len;
 static uint32_t jpeg_buf_pos;
 
@@ -138,13 +138,23 @@ static size_t jpeg_input(JDEC *jd, uint8_t *buf, size_t ndata) {
     return ndata;
 }
 
-/* TJpgDec output function: blit MCU block to display */
+/* TJpgDec output function: blit MCU block to display.
+ * TJpgDec produces RGB565 as little-endian uint16_t on ARM (low byte first
+ * in memory). ST7789 expects big-endian over SPI (high byte first).
+ * Swap each pixel's bytes before writing.                               */
 static int jpeg_output(JDEC *jd, void *bitmap, JRECT *rect) {
     (void)jd;
+    uint16_t *px = (uint16_t *)bitmap;
+    uint32_t npix = (uint32_t)(rect->right  - rect->left + 1)
+                  * (uint32_t)(rect->bottom - rect->top  + 1);
+    for (uint32_t i = 0; i < npix; i++) {
+        uint16_t v = px[i];
+        px[i] = (v << 8) | (v >> 8);  /* swap bytes */
+    }
     ST7789_DrawImage(rect->left, rect->top,
                      rect->right  - rect->left + 1,
                      rect->bottom - rect->top  + 1,
-                     (const uint16_t *)bitmap);
+                     px);
     return 1;
 }
 
