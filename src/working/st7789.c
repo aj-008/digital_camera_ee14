@@ -2,20 +2,11 @@
 #include "spi.h"
 #include "ee14lib.h"
 
-/*
- * st7789.c — ST7789 driver ported to bare-metal SPI1
- *
- * All HAL_SPI_Transmit() calls replaced with spi_transfer_buf().
- * All HAL_GPIO_WritePin() calls replaced with gpio_write() / spi_cs_*.
- * HAL_Delay() replaced with local spin-wait.
- * ST7789_GPIO_Init() added — call once from main() before ST7789_Init().
- */
 
 static void delay_ms(uint32_t ms) {
     for (uint32_t i = 0; i < ms * 8000; i++) __NOP();
 }
 
-/* Initialise the three LCD control GPIO pins (CS, DC, RST) */
 void ST7789_GPIO_Init(void) {
     gpio_config_mode(LCD_CS_PIN,  OUTPUT);
     gpio_config_mode(LCD_DC_PIN,  OUTPUT);
@@ -25,7 +16,6 @@ void ST7789_GPIO_Init(void) {
     ST7789_RST_Set();
 }
 
-/* ── Internal helpers ────────────────────────────────────────────────── */
 
 static void ST7789_WriteCommand(uint8_t cmd) {
     ST7789_Select();
@@ -68,7 +58,6 @@ static void ST7789_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint1
     ST7789_WriteCommand(ST7789_RAMWR);
 }
 
-/* ── Public API ─────────────────────────────────────────────────────── */
 
 void ST7789_SetRotation(uint8_t m) {
     ST7789_WriteCommand(ST7789_MADCTL);
@@ -81,7 +70,6 @@ void ST7789_SetRotation(uint8_t m) {
 }
 
 void ST7789_Init(void) {
-    /* Hardware reset */
     ST7789_RST_Clr(); delay_ms(25);
     ST7789_RST_Set(); delay_ms(50);
 
@@ -138,7 +126,6 @@ void ST7789_TearEffect(uint8_t tear) {
     ST7789_WriteCommand(tear ? 0x35 : 0x34);
 }
 
-/* ── Drawing primitives ─────────────────────────────────────────────── */
 
 void ST7789_DrawLine(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
     int16_t dx = ABS((int16_t)x2 - x1), sx = x1 < x2 ? 1 : -1;
@@ -200,7 +187,6 @@ void ST7789_DrawTriangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
 
 void ST7789_DrawFilledTriangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2,
                                 uint16_t x3, uint16_t y3, uint16_t color) {
-    /* Sort vertices by y */
     #define SWAP16(a,b) { uint16_t t = a; a = b; b = t; }
     if (y1 > y2) { SWAP16(y1,y2); SWAP16(x1,x2); }
     if (y1 > y3) { SWAP16(y1,y3); SWAP16(x1,x3); }
@@ -225,7 +211,6 @@ void ST7789_DrawFilledTriangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y
 }
 
 void ST7789_WriteChar(uint16_t x, uint16_t y, char ch, FontDef font, uint16_t color, uint16_t bgcolor) {
-    /* Requires a fonts.h implementation — stub provided */
     (void)x; (void)y; (void)ch; (void)font; (void)color; (void)bgcolor;
 }
 

@@ -1,10 +1,9 @@
 #include "spi.h"
 #include "stm32l432xx.h"
 
-/*
- * SPI1 — camera + display
- * PA5=SCK, PA6=MISO, PA7=MOSI, all AF5, ~2.5 MHz (/32)
- */
+
+
+/* SPI1 — camera + display */
 void spi_init(void) {
     RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
     RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
@@ -38,10 +37,7 @@ void spi_transfer_buf(const uint8_t *tx, uint8_t *rx, uint16_t len) {
     }
 }
 
-/*
- * SPI3 — SD card only
- * PB3=SCK, PB4=MISO, PB5=MOSI, all AF6, ~2.5 MHz (/32)
- */
+/* SPI3 is only used for the sd card to avoid cs & bus contention issues */
 void spi3_init(void) {
     RCC->AHB2ENR  |= RCC_AHB2ENR_GPIOBEN;
     RCC->APB1ENR1 |= RCC_APB1ENR1_SPI3EN;
@@ -50,13 +46,13 @@ void spi3_init(void) {
     GPIOB->MODER   |=  ((0x2 << (3*2)) | (0x2 << (4*2)) | (0x2 << (5*2)));
     GPIOB->OSPEEDR |=  ((0x3 << (3*2)) | (0x3 << (4*2)) | (0x3 << (5*2)));
     GPIOB->PUPDR   &= ~((0x3 << (3*2)) | (0x3 << (4*2)) | (0x3 << (5*2)));
-    GPIOB->PUPDR   |=  (0x1 << (4*2));   /* pull-up on MISO PB4 */
+    GPIOB->PUPDR   |=  (0x1 << (4*2)); 
     GPIOB->AFR[0]  &= ~((0xF << (3*4)) | (0xF << (4*4)) | (0xF << (5*4)));
     GPIOB->AFR[0]  |=  ((0x6 << (3*4)) | (0x6 << (4*4)) | (0x6 << (5*4)));
 
     SPI3->CR1 &= ~SPI_CR1_SPE;
     SPI3->CR1  = SPI_CR1_SSM | SPI_CR1_SSI | SPI_CR1_MSTR
-               | (0x4 << SPI_CR1_BR_Pos);  /* /32 -> ~2.5 MHz */
+               | (0x4 << SPI_CR1_BR_Pos); 
     SPI3->CR2  = (0x7 << SPI_CR2_DS_Pos) | SPI_CR2_FRXTH;
     SPI3->CR1 |= SPI_CR1_SPE;
 }

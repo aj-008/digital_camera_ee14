@@ -1,34 +1,16 @@
 #ifndef __ST7789_H
 #define __ST7789_H
 
-/*
- * st7789.h — ST7789 display driver, ported from HAL to bare-metal SPI1
- *
- * Pin assignments (reconciled — all HAL GPIO/SPI references removed):
- *
- *   Function   Nucleo   MCU pin   Notes
- *   --------   ------   -------   -----
- *   CS         D10      PA11      SPI chip-select (active-low)
- *   DC         D3       PB0       Data/Command select
- *   RST        D6       PB1       Hardware reset (active-low)
- *
- * Original st7789.h had:
- *   RST = PA8 / D9  ← CONFLICT: same pin as CAM_CS → moved to PB1 / D6
- *   DC  = PB1 / D6  ← CONFLICT: same pin as new RST  → moved to PB0 / D3
- *   CS  = PA4 / A3  ← available but kept near SPI bus → moved to PA11 / D10
- *
- * SPI: bare-metal SPI1 via spi_transfer() — no HAL_SPI calls.
- */
-
 #include "stm32l432xx.h"
 #include "ee14lib.h"
 #include "spi.h"
 #include <stdint.h>
 #include <stddef.h>
 
-/* ── Display geometry ────────────────────────────────────────────────── */
+
+// 320 width, 240 height (rotation is uint8_t 1-4)
 #define USING_240X320
-#define ST7789_ROTATION  1   /* landscape: 320 wide x 240 tall */
+#define ST7789_ROTATION  1  
 
 #ifdef USING_240X320
   #define ST7789_WIDTH   320
@@ -37,12 +19,10 @@
   #define Y_SHIFT        0
 #endif
 
-/* ── CS / DC / RST pins (ee14lib names) ─────────────────────────────── */
-#define LCD_CS_PIN   D10   /* PA11 */
-#define LCD_DC_PIN   D3    /* PB0  */
-#define LCD_RST_PIN  D6    /* PB1  */
+#define LCD_CS_PIN   D10  
+#define LCD_DC_PIN   D3  
+#define LCD_RST_PIN  D6 
 
-/* Active-low CS, DC low = command, RST active-low */
 #define ST7789_Select()    spi_cs_low(LCD_CS_PIN)
 #define ST7789_UnSelect()  spi_cs_high(LCD_CS_PIN)
 #define ST7789_DC_Clr()    gpio_write(LCD_DC_PIN, false)
@@ -52,7 +32,7 @@
 
 #define ABS(x) ((x) > 0 ? (x) : -(x))
 
-/* ── RGB565 colour constants ─────────────────────────────────────────── */
+/* RGB565 colour constants */
 #define WHITE       0xFFFF
 #define BLACK       0x0000
 #define BLUE        0x001F
@@ -63,7 +43,7 @@
 #define YELLOW      0xFFE0
 #define GRAY        0x8430
 
-/* ── ST7789 command codes ────────────────────────────────────────────── */
+/* command codes */
 #define ST7789_NOP      0x00
 #define ST7789_SWRESET  0x01
 #define ST7789_SLPIN    0x10
@@ -89,10 +69,8 @@
 
 #define ST7789_COLOR_MODE_16bit  0x55
 
-/* ── Font stub (provide your own fonts.h or remove text functions) ───── */
 typedef struct { uint8_t width; uint8_t height; const uint16_t *data; } FontDef;
 
-/* ── Public API ─────────────────────────────────────────────────────── */
 void ST7789_Init(void);
 void ST7789_SetRotation(uint8_t m);
 void ST7789_Fill_Color(uint16_t color);
@@ -113,7 +91,6 @@ void ST7789_DrawFilledCircle(int16_t x0, int16_t y0, int16_t r, uint16_t color);
 void ST7789_TearEffect(uint8_t tear);
 void ST7789_Test(void);
 
-/* Called from main to configure GPIO for LCD control pins */
 void ST7789_GPIO_Init(void);
 
-#endif /* __ST7789_H */
+#endif

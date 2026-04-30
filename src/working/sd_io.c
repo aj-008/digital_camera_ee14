@@ -2,18 +2,14 @@
 #include "spi.h"
 #include "ee14lib.h"
 
-/*
- * sd_io.c — SD card on SPI3 (PB3/PB4/PB5, AF6)
- * CS: D2 / PA12  (dedicated, no sharing)
- */
 
-#define SD_CS  D2   /* PA12 */
+#define SD_CS  D2
 
 void SD_IO_Init(void) {
     gpio_config_mode(SD_CS, OUTPUT);
     spi_cs_high(SD_CS);
     spi3_init();
-    /* >=74 dummy clocks with CS high to release SD MISO */
+    /* dummy clocks with CS high to release SD MISO */
     for (int i = 0; i < 10; i++)
         spi3_transfer(0xFF);
 }
