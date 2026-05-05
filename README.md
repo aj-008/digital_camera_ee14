@@ -41,3 +41,12 @@ A digital camera built on the STM32L432KC microcontroller. The system captures i
   | BTN_A | PA0 | A0 |
   | BTN_B | PA3 | A3 |
 
+  ## References
+  FatFS File System Module - [https://elm-chan.org/fsw/ff/](url)
+  SD Card Manager Module - [https://github.com/STMicroelectronics/STM32CubeF3/tree/master/Drivers/BSP/Adafruit_Shield](url)
+  TJPG Decoder Module - [https://elm-chan.org/fsw/tjpgd/](url)
+  ST7789 Display Driver - [https://github.com/Floyd-Fish/ST7789-STM32/tree/master/ST7789](url)
+  
+  
+  
+
