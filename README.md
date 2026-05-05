@@ -24,7 +24,7 @@ A digital camera built on the STM32L432KC microcontroller. The system captures i
 | Storage | SD card via SPI + FatFS |
 
 ## Pinout
- | Signal | Port/Pin | Arduino Pin |
+ | Signal | Port/Pin | STM32 Pin |
   |--------|----------|-------------|
   | SPI1 SCK | PA5 | A4 |
   | SPI1 MISO | PA6 | A5 |
