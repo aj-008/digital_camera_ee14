@@ -2,12 +2,12 @@
 Jack Geraghty, AJ Romeo, Andrew Schretzmayer, Taiyr Ashkenov
 
 
-A digital camera built on the STM32L432KC microcontroller. The system captures images using an OV2640 image sensor, previews them on an ST7789 TFT display, and writes them to an SD card using the FatFS filesystem.
+A digital camera built on the STM32L432KC microcontroller. The system captures images using an OV2640 image sensor, previews them on an ST7789 display, and writes them to an SD card using the FatFS filesystem.
 
 ## Features
 
-- **Image capture** via OV2640 camera sensor (SPI data + I2C config)
-- **SD card storage** using FatFS for persistent image saving
+- **Image capture** via OV2640 camera sensor
+- **SD card storage** using FatFS for image saving
 - **Shared SPI bus** between camera and display
 
 ## Hardware
