@@ -19,9 +19,3 @@ A digital camera built on the STM32L432KC microcontroller. The system captures i
 | Display | ST7789 TFT LCD, 240×320, SPI |
 | Storage | SD card via SPI + FatFS |
 
-## Build & Flash
-
-```bash
-pio run          # Build
-pio run --target upload   # Flash to board
-```
