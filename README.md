@@ -1,4 +1,5 @@
 <img width="600" height="338" alt="output" src="https://github.com/user-attachments/assets/ba8c9e58-5b83-465b-9aa0-0f723b5d3fcf" />
+Video shows an image being taken on the camera, then viewed in the image gallery.
 
 
 
