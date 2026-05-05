@@ -3,14 +3,14 @@
 #include "ee14lib.h"
 #include <stddef.h>
 
-/* This is here to silence a compiler error */
+// silences a compiler error
 #ifndef PROGMEM
 #define PROGMEM
 #endif
 #include "ov2640_regs.h"
 
 
-/* SPI and I2C helpers for the arducam */
+// SPI and I2C helpers
 static uint8_t spi_read_reg(uint8_t addr) {
     uint8_t val;
     spi_cs_low(CAM_CS);
@@ -41,12 +41,12 @@ static void i2c_init_peripheral(void) {
 
     I2C1->CR1 &= ~I2C_CR1_PE;
 
-    /* 100 kHz at 80 MHz */
-    I2C1->TIMINGR = (0U    << 28) |  
-                    (1U    << 20) | 
+    // 100 kHz at 80 MHz
+    I2C1->TIMINGR = (0U    << 28) |
+                    (1U    << 20) |
                     (0U    << 16) |
-                    (0xFU  <<  8) | 
-                    (0x13U      ); 
+                    (0xFU  <<  8) |
+                    (0x13U      );
 
     I2C1->CR1 |= I2C_CR1_PE;
 }
@@ -94,9 +94,7 @@ static void delay_ms(uint32_t ms) {
     for (uint32_t i = 0; i < ms * 8000; i++) __NOP();
 }
 
-/* -----------------------------------------------------------------------
- * Public API
- * ----------------------------------------------------------------------- */
+// Public Functions
 int camera_init(void) {
     gpio_config_mode(CAM_CS, OUTPUT);
     spi_cs_high(CAM_CS);

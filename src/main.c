@@ -25,9 +25,7 @@
 #define BTN_A  A0
 #define BTN_B  A3
 
-/* -----------------------------------------------------------------------
- * System
- * ----------------------------------------------------------------------- */
+// System
 static volatile uint32_t g_tick = 0;
 void SysTick_Handler(void) { g_tick++; }
 uint32_t HAL_GetTick(void) { return g_tick; }
@@ -63,15 +61,13 @@ static void SystemClock_Config(void) {
     SysTick_Config(SystemCoreClock / 1000);
 }
 
-/* -----------------------------------------------------------------------
- * Button helpers
- * ----------------------------------------------------------------------- */
+// Button helpers
 #define NO_BTN  ((EE14Lib_Pin)0xFF)
 
 static char wait_btn(EE14Lib_Pin a, EE14Lib_Pin b) {
     int has_a = (a != NO_BTN);
     int has_b = (b != NO_BTN);
-    /* Wait for both to be released first */
+    // Wait for both to be released first
     while ((has_a && !gpio_read(a)) || (has_b && !gpio_read(b)));
     delay_ms(20);
     while (1) {
@@ -94,9 +90,7 @@ static char wait_btn(EE14Lib_Pin a, EE14Lib_Pin b) {
     }
 }
 
-/* -----------------------------------------------------------------------
- * JPEG / TJpgDec
- * ----------------------------------------------------------------------- */
+// JPEG / TJpgDec
 static uint8_t  jpeg_buf[12288];
 static uint32_t jpeg_buf_len;
 static uint32_t jpeg_buf_pos;
@@ -144,16 +138,16 @@ static int load_fifo(void) {
 
     spi_cs_low(CAM_CS);
     spi_transfer(ARDUCHIP_BURST_FIFO);
-    spi_transfer(0x00);  /* dummy byte */
+    spi_transfer(0x00);  // dummy byte
     spi_transfer_buf(NULL, jpeg_buf + 1, (uint16_t)length);
     spi_cs_high(CAM_CS);
 
     if      (jpeg_buf[1] == 0xFF && jpeg_buf[2] == 0xD8) {
-        /* shift down by 1 */
+        // shift down by 1
         memmove(jpeg_buf, jpeg_buf + 1, length);
         jpeg_buf_len = length;
     } else if (jpeg_buf[1] == 0xD8 && jpeg_buf[2] == 0xFF) {
-        /* 1-byte offset if it's weird*/
+        // 1-byte offset if it's weird
         jpeg_buf[0] = 0xFF;
         jpeg_buf_len = length + 1;
     } else {
@@ -163,9 +157,7 @@ static int load_fifo(void) {
     return 0;
 }
 
-/* -----------------------------------------------------------------------
- * SD helpers
- * ----------------------------------------------------------------------- */
+// SD helpers
 static FATFS fs;
 static uint32_t file_counter = 0;
 
@@ -201,11 +193,9 @@ static int load_from_sd(const char *fname) {
     return 0;
 }
 
-/* -----------------------------------------------------------------------
- * Display UI helpers
- * ----------------------------------------------------------------------- */
+// Display UI helpers
 
-/* Tiny 5x7 font */
+// Tiny 5x7 font
 static const uint8_t font5x7[96][5] = {
     {0,0,0,0,0},       
     {0,0,0x5F,0,0},   
@@ -333,47 +323,38 @@ static void draw_string(uint16_t x, uint16_t y, const char *s,
 
 
 
-/* -----------------------------------------------------------------------
- * Menu screen
- * ----------------------------------------------------------------------- */
+// Menu screen
 typedef enum { MODE_MENU, MODE_CAMERA, MODE_LIBRARY } AppMode;
 
 static void draw_icon_gallery(uint16_t x, uint16_t y, uint16_t col) {
-    /* Back photo */
+    // back photo
     ST7789_Fill(x+8,  y+6,  x+58, y+46, 0x4208);
     ST7789_DrawRectangle(x+8, y+6, x+58, y+46, col);
-    /* Front photo */
+    // front photo
     ST7789_Fill(x+2,  y+14, x+52, y+54, 0x2945);
     ST7789_DrawRectangle(x+2, y+14, x+52, y+54, col);
-    /* Mountain shape inside front photo */
-    ST7789_Fill(x+6,  y+36, x+48, y+50, 0x07E0);  /* green ground */
-    /* sky blue fill */
-    ST7789_Fill(x+6,  y+18, x+48, y+36, 0x865F);
-    /* sun */
-    ST7789_Fill(x+36, y+20, x+44, y+28, YELLOW);
-    /* mountain peak */
+    ST7789_Fill(x+6,  y+36, x+48, y+50, 0x07E0);  // green ground
+    ST7789_Fill(x+6,  y+18, x+48, y+36, 0x865F);  // sky
+    ST7789_Fill(x+36, y+20, x+44, y+28, YELLOW);  // sun
     ST7789_DrawLine(x+16, y+36, x+27, y+22, WHITE);
     ST7789_DrawLine(x+27, y+22, x+38, y+36, WHITE);
 }
 
 static void draw_icon_camera(uint16_t x, uint16_t y, uint16_t col) {
-    /* Camera body */
+    // body
     ST7789_Fill(x+2,  y+16, x+58, y+54, 0x4208);
     ST7789_DrawRectangle(x+2, y+16, x+58, y+54, col);
-    /* Viewfinder bump */
+    // viewfinder bump
     ST7789_Fill(x+18, y+10, x+42, y+18, 0x4208);
     ST7789_DrawRectangle(x+18, y+10, x+42, y+18, col);
-    /* Lens outer */
+    // lens
     ST7789_DrawCircle(x+30, y+35, 14, col);
     ST7789_Fill(x+17, y+22, x+43, y+48, 0x2945);
     ST7789_DrawCircle(x+30, y+35, 14, col);
-    /* Lens inner */
     ST7789_DrawFilledCircle(x+30, y+35, 9, 0x035F);
     ST7789_DrawCircle(x+30, y+35, 9, col);
-    /* Sheen dot */
-    ST7789_Fill(x+24, y+27, x+28, y+31, 0xFFFF);
-    /* Flash dot */
-    ST7789_Fill(x+48, y+20, x+54, y+26, YELLOW);
+    ST7789_Fill(x+24, y+27, x+28, y+31, 0xFFFF);  // sheen
+    ST7789_Fill(x+48, y+20, x+54, y+26, YELLOW);  // flash
 }
 
 static void draw_menu(int sd_ok) {
@@ -399,9 +380,7 @@ static void draw_menu(int sd_ok) {
     draw_string(245, 166, " BUTTON", WHITE, BLACK, 1);
 }
 
-/* -----------------------------------------------------------------------
- * Camera mode
- * ----------------------------------------------------------------------- */
+// Camera mode
 static void draw_camera_ready(void) {
     ST7789_Fill_Color(BLACK);
     ST7789_DrawRectangle(0, 0, ST7789_WIDTH-1, ST7789_HEIGHT-1, 0x07E0);
@@ -450,9 +429,7 @@ static void run_camera_mode(int sd_ok) {
     }
 }
 
-/* -----------------------------------------------------------------------
- * Library mode
- * ----------------------------------------------------------------------- */
+// Library mode
 #define MAX_PHOTOS 64
 
 static char photo_names[MAX_PHOTOS][13];
@@ -523,9 +500,7 @@ static void run_library_mode(void) {
     }
 }
 
-/* -----------------------------------------------------------------------
- * main
- * ----------------------------------------------------------------------- */
+// main
 int main(void) {
     __enable_irq();
     SystemClock_Config();
