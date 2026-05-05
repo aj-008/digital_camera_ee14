@@ -38,7 +38,6 @@ struct sensor_reg {
 int      camera_init(void);
 int      camera_capture(void);
 uint32_t camera_fifo_length(void);
-int      camera_dump_uart(USART_TypeDef *uart);
 void     camera_fifo_reset_rdptr(void);
 
 
