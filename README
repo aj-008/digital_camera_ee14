@@ -1,0 +1,27 @@
+# Digital Camera — EE14 Final Project
+Jack Geraghty, AJ Romeo, Andrew Schretzmayer, Taiyr Ashkenov
+
+
+A digital camera built on the STM32L432KC microcontroller. The system captures images using an OV2640 image sensor, previews them on an ST7789 TFT display, and writes them to an SD card using the FatFS filesystem.
+
+## Features
+
+- **Image capture** via OV2640 camera sensor (SPI data + I2C config)
+- **SD card storage** using FatFS for persistent image saving
+- **Shared SPI bus** between camera and display
+
+## Hardware
+
+| Component | Part |
+|---|---|
+| Microcontroller | STM32L432KC |
+| Image Sensor | OV2640 (Arducam 2MP SPI module) |
+| Display | ST7789 TFT LCD, 240×320, SPI |
+| Storage | SD card via SPI + FatFS |
+
+## Build & Flash
+
+```bash
+pio run          # Build
+pio run --target upload   # Flash to board
+```
